@@ -16,6 +16,8 @@ cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
 stm32f4xx-hal = { version = "0.14.0", features = ["stm32f401", "defmt", "rtic", "usb_fs" ] }
 systick-monotonic = "1.0.1"
 
+switch-hal = "0.4.0"
+
 # cargo build/run
 [profile.dev]
 codegen-units = 1
