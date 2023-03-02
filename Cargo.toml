@@ -17,6 +17,12 @@ stm32f4xx-hal = { version = "0.14.0", features = ["stm32f401", "defmt", "rtic", 
 systick-monotonic = "1.0.1"
 
 switch-hal = "0.4.0"
+usb-device = "0.2.9"
+usbd-hid = "0.6.1"
+
+[dependencies.serde]
+version="1"
+default-features=false
 
 # cargo build/run
 [profile.dev]

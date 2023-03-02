@@ -11,13 +11,13 @@ use switch_hal::{ActiveHigh, IntoSwitch, Switch};
 use systick_monotonic::Systick;
 use usb_device::class_prelude::UsbBusAllocator;
 
-// use crate::usb::interface::UsbInterface;
+use crate::usb::interface::UsbInterface;
 
 /// Configures the micro for operation
-pub fn configure(
+pub fn configure<'a>(
     core_peripherals: cortex_m::Peripherals,
     device_peripherals: pac::Peripherals,
-) -> Configuration /*<'a>*/ {
+) -> Configuration<'a> {
     /// The allocated memory for the USB port
     static mut USB_MEM: [u32; 1024] = [0; 1024];
     static mut USB_BUS: Option<UsbBusAllocator<stm32f4xx_hal::otg_fs::UsbBusType>> = None;
@@ -63,27 +63,21 @@ pub fn configure(
         hclk: clocks.hclk(),
     };
 
-    let _usb_allocator = unsafe {
+    let usb_allocator = unsafe {
         USB_BUS = Some(UsbBusType::new(usb, &mut USB_MEM));
         let usb_bus = USB_BUS.as_ref().unwrap();
         usb_bus
     };
 
-    // for interrupt driven comms, unmask here
-    // unsafe {
-    //     // enable the OTG_FS interrupt to handle USB messages
-    //     cortex_m::peripheral::NVIC::unmask(Interrupt::OTG_FS);
-    // }
-
     Configuration {
-        // usb: UsbInterface::new(usb_allocator),
+        usb: UsbInterface::new(usb_allocator),
         led_pin,
         timer,
     }
 }
 
-pub struct Configuration /*<'a>*/ {
+pub struct Configuration<'a> {
     pub led_pin: Switch<ErasedPin<Output>, ActiveHigh>,
     pub timer: Systick<1000>,
-    // pub usb: UsbInterface<'a>,
+    pub usb: UsbInterface<'a>,
 }

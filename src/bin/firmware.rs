@@ -74,11 +74,11 @@ mod app {
         if *cx.local.led_state {
             cx.local.led_pin.off().ok();
             *cx.local.led_state = false;
+            blink::spawn_after(systick_monotonic::ExtU64::millis(500)).unwrap();
         } else {
             cx.local.led_pin.on().ok();
             *cx.local.led_state = true;
+            blink::spawn_after(systick_monotonic::ExtU64::millis(1500)).unwrap();
         }
-
-        blink::spawn_after(systick_monotonic::ExtU64::secs(1)).unwrap();
     }
 }
