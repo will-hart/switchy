@@ -17,11 +17,9 @@ use crate::usb::interface::UsbInterface;
 pub fn configure<'a>(
     core_peripherals: cortex_m::Peripherals,
     device_peripherals: pac::Peripherals,
+    usb_bus: &'static mut Option<UsbBusAllocator<stm32f4xx_hal::otg_fs::UsbBusType>>,
+    usb_mem: &'static mut [u32; 1024],
 ) -> Configuration<'a> {
-    /// The allocated memory for the USB port
-    static mut USB_MEM: [u32; 1024] = [0; 1024];
-    static mut USB_BUS: Option<UsbBusAllocator<stm32f4xx_hal::otg_fs::UsbBusType>> = None;
-
     // Take ownership over raw device and convert it into the corresponding HAL struct
     let rcc = device_peripherals.RCC.constrain();
 
@@ -63,11 +61,8 @@ pub fn configure<'a>(
         hclk: clocks.hclk(),
     };
 
-    let usb_allocator = unsafe {
-        USB_BUS = Some(UsbBusType::new(usb, &mut USB_MEM));
-        let usb_bus = USB_BUS.as_ref().unwrap();
-        usb_bus
-    };
+    *usb_bus = Some(UsbBusType::new(usb, usb_mem));
+    let usb_allocator = usb_bus.as_ref().unwrap();
 
     Configuration {
         usb: UsbInterface::new(usb_allocator),

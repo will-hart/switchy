@@ -3,19 +3,22 @@
 
 use switchy_rtic as _; // global logger + panicking-behavior + memory layout
 
+use stm32f4xx_hal as hal;
+use switch_hal::{ActiveHigh, OutputSwitch, Switch};
+use systick_monotonic::*;
+use usb_device::class_prelude::UsbBusAllocator;
+
+use switchy_rtic::configure;
+
+use hal::gpio::{ErasedPin, Output};
+
 #[rtic::app(
     device = stm32f4xx_hal::pac,
     peripherals = true,
     dispatchers = [EXTI1]
 )]
 mod app {
-    use stm32f4xx_hal as hal;
-    use switch_hal::{ActiveHigh, OutputSwitch, Switch};
-    use systick_monotonic::*;
-
-    use switchy_rtic::configure;
-
-    use hal::gpio::{ErasedPin, Output};
+    use super::*;
 
     #[monotonic(binds = SysTick, default = true)]
     type SysMono = Systick<1000>;
@@ -31,16 +34,19 @@ mod app {
         led_state: bool,
     }
 
-    #[init]
+    #[init(local = [
+        USB_BUS: Option<UsbBusAllocator<stm32f4xx_hal::otg_fs::UsbBusType>> = None, 
+        USB_MEM: [u32; 1024] = [0;1024]
+    ])]
     fn init(cx: init::Context) -> (Shared, Local, init::Monotonics) {
         defmt::info!("init");
 
         // Setup the monotonic timer
 
-        let config = configure::configure(cx.core, cx.device);
+        let config = configure::configure(cx.core, cx.device, cx.local.USB_BUS, cx.local.USB_MEM);
 
         welcome::spawn().unwrap();
-        blink::spawn_after(systick_monotonic::ExtU64::secs(1)).unwrap();
+        blink::spawn_after(systick_monotonic::ExtU64::millis(250)).unwrap();
 
         (
             Shared {
