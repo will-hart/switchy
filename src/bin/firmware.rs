@@ -10,11 +10,12 @@ use switchy_rtic as _; // global logger + panicking-behavior + memory layout
 )]
 mod app {
     use stm32f4xx_hal as hal;
-    use switch_hal::{ActiveHigh, IntoSwitch, OutputSwitch, Switch};
+    use switch_hal::{ActiveHigh, OutputSwitch, Switch};
     use systick_monotonic::*;
 
+    use switchy_rtic::configure;
+
     use hal::gpio::{ErasedPin, Output};
-    use hal::prelude::*;
 
     #[monotonic(binds = SysTick, default = true)]
     type SysMono = Systick<1000>;
@@ -35,28 +36,8 @@ mod app {
         defmt::info!("init");
 
         // Setup the monotonic timer
-        let mono = Systick::new(cx.core.SYST, 84_000_000);
 
-        let rcc = cx.device.RCC.constrain();
-        let clocks = rcc
-            .cfgr
-            .use_hse(16.MHz())
-            .sysclk(84.MHz())
-            .require_pll48clk()
-            .freeze();
-        assert!(clocks.is_pll48clk_valid());
-
-        // Acquire GPIO
-        // let gpioa = cx.device.GPIOA.split();
-        // let gpiob = device_peripherals.GPIOB.split();
-        let gpioc = cx.device.GPIOC.split();
-
-        let mut led_pin = gpioc
-            .pc13
-            .into_push_pull_output()
-            .erase()
-            .into_active_high_switch();
-        led_pin.off().ok();
+        let config = configure::configure(cx.core, cx.device);
 
         welcome::spawn().unwrap();
         blink::spawn_after(systick_monotonic::ExtU64::secs(1)).unwrap();
@@ -66,10 +47,10 @@ mod app {
                 // Initialization of shared resources go here
             },
             Local {
-                led_pin,
+                led_pin: config.led_pin,
                 led_state: false,
             },
-            init::Monotonics(mono),
+            init::Monotonics(config.timer),
         )
     }
 
