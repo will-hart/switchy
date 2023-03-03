@@ -1,16 +1,18 @@
+//! Author: William Hart, March 2023
+
+#![deny(unsafe_code)]
+// #![deny(warnings)]
+#![deny(missing_docs)]
 #![no_main]
 #![no_std]
 
 use switchy_rtic as _; // global logger + panicking-behavior + memory layout
-
 use stm32f4xx_hal as hal;
 use switch_hal::{ActiveHigh, OutputSwitch, Switch};
-use systick_monotonic::*;
 use usb_device::class_prelude::UsbBusAllocator;
+use hal::{timer::{fugit, MonoTimerUs}, gpio::{ErasedPin, Output}};
+use switchy_rtic::{configure};
 
-use switchy_rtic::configure;
-
-use hal::gpio::{ErasedPin, Output};
 
 #[rtic::app(
     device = stm32f4xx_hal::pac,
@@ -20,8 +22,8 @@ use hal::gpio::{ErasedPin, Output};
 mod app {
     use super::*;
 
-    #[monotonic(binds = SysTick, default = true)]
-    type SysMono = Systick<1000>;
+    #[monotonic(binds = TIM2, default = true)]
+    type SysMono = MonoTimerUs<hal::pac::TIM2>;
 
     // Shared resources go here
     #[shared]
@@ -41,17 +43,16 @@ mod app {
     fn init(cx: init::Context) -> (Shared, Local, init::Monotonics) {
         defmt::info!("init");
 
-        // Setup the monotonic timer
-
+        // configure all the clocks and peripherals
         let config = configure::configure(cx.core, cx.device, cx.local.USB_BUS, cx.local.USB_MEM);
 
-        welcome::spawn().unwrap();
-        blink::spawn_after(systick_monotonic::ExtU64::millis(250)).unwrap();
+
+        // show a blinky light
+        #[cfg(any(feature = "dev_board", feature = "board_rev_3"))]
+        blink::spawn_after(fugit::ExtU32::secs(1u32)).unwrap();
 
         (
-            Shared {
-                // Initialization of shared resources go here
-            },
+            Shared {},
             Local {
                 led_pin: config.led_pin,
                 led_state: false,
@@ -60,31 +61,22 @@ mod app {
         )
     }
 
-    // Optional idle, can be removed if not needed.
-    #[idle]
-    fn idle(_: idle::Context) -> ! {
-        defmt::info!("idle");
-
-        loop {
-            continue;
-        }
-    }
-
     #[task]
     fn welcome(_cx: welcome::Context) {
         defmt::info!("Switchy Online!");
     }
-
+    
+    #[cfg(any(feature = "dev_board", feature = "board_rev_3"))]
     #[task(local = [led_pin, led_state])]
     fn blink(cx: blink::Context) {
         if *cx.local.led_state {
             cx.local.led_pin.off().ok();
             *cx.local.led_state = false;
-            blink::spawn_after(systick_monotonic::ExtU64::millis(500)).unwrap();
+            blink::spawn_after(fugit::ExtU32::millis(500)).unwrap();
         } else {
             cx.local.led_pin.on().ok();
             *cx.local.led_state = true;
-            blink::spawn_after(systick_monotonic::ExtU64::millis(1500)).unwrap();
+            blink::spawn_after(fugit::ExtU32::millis(1500)).unwrap();
         }
     }
 }

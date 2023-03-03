@@ -3,19 +3,19 @@
 use hal::{
     gpio::{ErasedPin, Output},
     otg_fs::{UsbBusType, USB},
-    pac::{self},
+    pac::{self, TIM2},
     prelude::*,
+    timer::MonoTimerUs,
 };
 use stm32f4xx_hal as hal;
 use switch_hal::{ActiveHigh, IntoSwitch, Switch};
-use systick_monotonic::Systick;
 use usb_device::class_prelude::UsbBusAllocator;
 
 use crate::usb::interface::UsbInterface;
 
 /// Configures the micro for operation
 pub fn configure<'a>(
-    core_peripherals: cortex_m::Peripherals,
+    _core_peripherals: cortex_m::Peripherals,
     device_peripherals: pac::Peripherals,
     usb_bus: &'static mut Option<UsbBusAllocator<stm32f4xx_hal::otg_fs::UsbBusType>>,
     usb_mem: &'static mut [u32; 1024],
@@ -33,7 +33,7 @@ pub fn configure<'a>(
         .freeze();
     assert!(clocks.is_pll48clk_valid());
 
-    let timer: Systick<1000> = Systick::new(core_peripherals.SYST, 84_000_000);
+    let timer: MonoTimerUs<TIM2> = device_peripherals.TIM2.monotonic_us(&clocks);
 
     // Acquire GPIO
     let gpioa = device_peripherals.GPIOA.split();
@@ -41,12 +41,16 @@ pub fn configure<'a>(
     let gpioc = device_peripherals.GPIOC.split();
 
     // set up the flashy LED
+    #[cfg(feature = "board_rev_3")]
+    let pin = gpioc.pc3;
     // NOTE: For rev 1/2 on the board there is no LED.
     //       This setup is for the black pill dev board.
     //       In rev 3 this should change to PC3
     //       PC3 and PC13 are both unused in rev 1/2, so no issues here.
-    let led_pin = gpioc
-        .pc13
+    #[cfg(not(feature = "board_rev_3"))]
+    let pin = gpioc.pc13;
+
+    let led_pin = pin
         .into_push_pull_output()
         .erase()
         .into_active_high_switch();
@@ -73,6 +77,6 @@ pub fn configure<'a>(
 
 pub struct Configuration<'a> {
     pub led_pin: Switch<ErasedPin<Output>, ActiveHigh>,
-    pub timer: Systick<1000>,
+    pub timer: MonoTimerUs<TIM2>,
     pub usb: UsbInterface<'a>,
 }
