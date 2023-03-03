@@ -1,52 +1,44 @@
+/// A command is a message received from the PC, it consists of:
+/// - a u8 message type
+/// - two u8 payloads
 #[derive(Copy, Clone, Default)]
-pub struct Command(u8, u8);
+pub struct Command {
+    pub command_id: u8,
+    pub payload_a: u8,
+    pub payload_b: u8,
+}
 
 impl Command {
-    pub fn new(modifier: u8, key: u8) -> Self {
-        Self(modifier, key)
+    /// Creates a new command from the given values
+    pub fn new(command_id: u8, payload_a: u8, payload_b: u8) -> Self {
+        Self {
+            command_id,
+            payload_a,
+            payload_b,
+        }
     }
 }
 
-pub struct CommandRingBuffer<const N: usize> {
-    buffer: [Option<Command>; N],
-    current_write_index: usize,
-    current_read_index: usize,
+impl From<[u8; 3]> for Command {
+    fn from(value: [u8; 3]) -> Self {
+        Self {
+            command_id: value[0],
+            payload_a: value[1],
+            payload_b: value[2],
+        }
+    }
 }
 
-impl<const N: usize> CommandRingBuffer<N> {
-    pub fn new() -> Self {
-        CommandRingBuffer {
-            buffer: [None; N],
-            current_write_index: 0,
-            current_read_index: 0,
-        }
-    }
+/// A KeyAction is something done by a user that should be queued
+/// up and sent over the HID to the PC. It includes a key and a modifier.
+#[derive(Copy, Clone, Default)]
+pub struct KeyAction {
+    pub modifiers: u8,
+    pub key: u8,
+}
 
-    /// Adds an item to the ring buffer and returns true if this consumed an unused older item
-    /// (i.e. if the read pointer was moved forwards)
-    pub fn push(&mut self, cmd: Command) -> bool {
-        self.buffer[self.current_write_index] = Some(cmd);
-
-        if self.current_write_index == self.current_read_index {
-            self.current_read_index = (self.current_read_index + 1) % N;
-            self.current_write_index = (self.current_write_index + 1) % N;
-            true
-        } else {
-            self.current_write_index = (self.current_write_index + 1) % N;
-            false
-        }
-    }
-
-    /// Pops the current item off the ring buffer. If the current item is None, i.e. unset, the
-    /// read position isn't moved. If the current item is Some, or if we aren't at the same place
-    /// as the ring buffer cursor, then we move the read position forward.
-    pub fn pop(&mut self) -> Option<Command> {
-        let result = self.buffer[self.current_read_index].take();
-
-        if result.is_some() || self.current_read_index != self.current_write_index {
-            self.current_read_index = (self.current_read_index + 1) % N;
-        }
-
-        result
+impl KeyAction {
+    pub fn new(modifiers: u8, key: u8) -> Self {
+        Self { modifiers, key }
     }
 }

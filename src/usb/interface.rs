@@ -10,17 +10,15 @@ use usbd_hid::hid_class::HIDClass;
 
 use crate::usb::descriptor::{CommandReport, CustomKeyboardReport};
 
-use super::command::CommandRingBuffer;
+use super::command::KeyAction;
 
-const USB_POLL_MS: u8 = 30;
+const USB_POLL_MS: u8 = 10;
 
 pub struct UsbInterface<'a> {
     pub hid: HIDClass<'a, UsbBus<USB>>,
     command: HIDClass<'a, UsbBus<USB>>,
     pub bus: UsbDevice<'a, UsbBus<USB>>,
     report: CustomKeyboardReport,
-    #[allow(unused)]
-    command_queue: CommandRingBuffer<30>,
 }
 
 impl<'a> UsbInterface<'a> {
@@ -49,7 +47,6 @@ impl<'a> UsbInterface<'a> {
                 leds: 0,
                 keycodes: [0, 0, 0, 0, 0, 0],
             },
-            command_queue: CommandRingBuffer::new(),
         }
     }
 
@@ -72,21 +69,16 @@ impl<'a> UsbInterface<'a> {
     }
 
     /// Sends the report, if one is ready to go.
-    pub fn send_report(
-        &mut self,
-        key1: u8,
-        key2: u8,
-        force_update: bool,
-    ) -> Result<bool, usb_device::UsbError> {
-        // if either key pressed value has changed, send a report
-        if force_update || self.report.keycodes[0] != key1 || self.report.keycodes[1] != key2 {
-            self.report.keycodes[0] = key1;
-            self.report.keycodes[1] = key2;
-            self.hid.push_input(&self.report).ok();
+    pub fn send_report(&mut self, action: KeyAction) -> Result<bool, usb_device::UsbError> {
+        self.report.modifier = action.modifiers;
+        self.report.keycodes[0] = action.key;
 
-            return Ok(true);
+        match self.hid.push_input(&self.report) {
+            Ok(_) => Ok(true),
+            Err(e) => {
+                defmt::println!("Error printing report {:?}", e);
+                Ok(false)
+            }
         }
-
-        Ok(false)
     }
 }
