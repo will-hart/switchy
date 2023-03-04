@@ -17,17 +17,22 @@ use crate::usb::interface::UsbInterface;
 pub fn configure<'a>(
     _core_peripherals: cortex_m::Peripherals,
     device_peripherals: pac::Peripherals,
-    usb_bus: &'static mut Option<UsbBusAllocator<stm32f4xx_hal::otg_fs::UsbBusType>>,
+    usb_alloc: &'static mut Option<UsbBusAllocator<stm32f4xx_hal::otg_fs::UsbBusType>>,
     usb_mem: &'static mut [u32; 1024],
 ) -> Configuration<'a> {
     // Take ownership over raw device and convert it into the corresponding HAL struct
     let rcc = device_peripherals.RCC.constrain();
 
+    #[cfg(feature = "dev_board")]
+    let hse_freq = 25.MHz();
+    #[cfg(not(feature = "dev_board"))]
+    let hse_freq = 16.MHz();
+
     // Freeze the configuration of all the clocks in the system and store the
     // frozen frequencies in `clocks`
     let clocks = rcc
         .cfgr
-        .use_hse(16.MHz())
+        .use_hse(hse_freq)
         .sysclk(84.MHz())
         .require_pll48clk()
         .freeze();
@@ -65,8 +70,8 @@ pub fn configure<'a>(
         hclk: clocks.hclk(),
     };
 
-    *usb_bus = Some(UsbBusType::new(usb, usb_mem));
-    let usb_allocator = usb_bus.as_ref().unwrap();
+    *usb_alloc = Some(UsbBusType::new(usb, usb_mem));
+    let usb_allocator = usb_alloc.as_ref().unwrap();
 
     Configuration {
         usb: UsbInterface::new(usb_allocator),

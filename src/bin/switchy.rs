@@ -3,7 +3,7 @@
 //! Author: William Hart, March 2023
 
 #![deny(unsafe_code)]
-// #![deny(warnings)]
+#![deny(warnings)]
 #![deny(missing_docs)]
 #![no_main]
 #![no_std]
@@ -81,7 +81,10 @@ mod app {
         #[cfg(any(feature = "dev_board", feature = "board_rev_3"))]
         blink::spawn_after(fugit::ExtU32::secs(1u32)).unwrap();
 
+        // for testing
         spawn_action::spawn_after(fugit::ExtU32::secs(KEY_SPAWN_DELAY_SEC)).unwrap();
+        
+        // forward actions from the queue
         send_actions_to_pc::spawn_after(fugit::ExtU32::millis(USB_QUEUE_CONSUMPTION_DELAY_MS)).unwrap();
 
         (
@@ -117,6 +120,15 @@ mod app {
         }
 
         spawn_action::spawn_after(fugit::ExtU32::secs(KEY_SPAWN_DELAY_SEC)).unwrap();
+    }
+
+    #[task(binds = OTG_FS, shared = [usb, command_queue])]
+    fn usb_interrupt(mut cx: usb_interrupt::Context) {
+        cx.shared.usb.lock(|u| {
+            if u.poll() {
+                defmt::info!("DATA AVAILABLE");
+            }
+        });
     }
 
     /// Perioidically monitor the action queue and send on at a time
