@@ -13,11 +13,12 @@ name = "switchy"
 path = "src/bin/switchy.rs"
 
 [features]
-default = ["dev_board", "logging"]
+default = ["dev_board", "logging", "joysticks"]
 logging = ["shift_register_hal/logging"]
 dev_board = []
 board_rev_1_or_2 = []
 board_rev_3 = []
+joysticks = []
 
 [dependencies]
 defmt = "0.3.0"

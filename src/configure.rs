@@ -1,9 +1,14 @@
 //! Configures the microcontroller for use and returns the requried pins
 
 use hal::{
+    adc::{
+        config::{AdcConfig, Dma, SampleTime, Scan, Sequence},
+        Adc,
+    },
+    dma::{config::DmaConfig, PeripheralToMemory, StreamX, StreamsTuple, Transfer},
     gpio::{ErasedPin, Input, Output, PinState},
     otg_fs::{UsbBusType, USB},
-    pac::{self, TIM2},
+    pac::{self, ADC1, DMA2, TIM2},
     prelude::*,
     timer::MonoTimerUs,
 };
@@ -106,6 +111,31 @@ pub fn configure<'a>(
     let encoder3 = encoder!(gpioc.pc7, gpioc.pc6);
     let encoder4 = encoder!(gpioc.pc9, gpioc.pc8);
 
+    // get ADCs
+    let joy1x = gpioa.pa1.into_analog();
+    let joy1y = gpioa.pa2.into_analog();
+    let joy2x = gpioa.pa3.into_analog();
+    let joy2y = gpioa.pa4.into_analog();
+
+    // configure the ADCs via DMA
+    let dma = StreamsTuple::new(device_peripherals.DMA2);
+    let dma_config = DmaConfig::default()
+        .transfer_complete_interrupt(true)
+        .memory_increment(true)
+        .double_buffer(false);
+    let adc_config = AdcConfig::default()
+        .dma(Dma::Continuous)
+        .scan(Scan::Enabled);
+    let mut adc = Adc::adc1(device_peripherals.ADC1, true, adc_config);
+    adc.configure_channel(&joy1x, Sequence::One, SampleTime::Cycles_112);
+    adc.configure_channel(&joy1y, Sequence::Two, SampleTime::Cycles_112);
+    adc.configure_channel(&joy2x, Sequence::Three, SampleTime::Cycles_112);
+    adc.configure_channel(&joy2y, Sequence::Four, SampleTime::Cycles_112);
+    adc.enable();
+
+    let first_buffer = cortex_m::singleton!(: [u16;4] = [0;4]).unwrap();
+    let transfer = Transfer::init_peripheral_to_memory(dma.0, adc, first_buffer, None, dma_config);
+
     Configuration {
         usb: UsbInterface::new(usb_allocator),
         led_pin,
@@ -118,6 +148,8 @@ pub fn configure<'a>(
         encoder2,
         encoder3,
         encoder4,
+
+        adc_transfer: transfer,
     }
 }
 
@@ -133,4 +165,7 @@ pub struct Configuration<'a> {
     pub encoder2: Rotary<ErasedPin<Input>, ErasedPin<Input>>,
     pub encoder3: Rotary<ErasedPin<Input>, ErasedPin<Input>>,
     pub encoder4: Rotary<ErasedPin<Input>, ErasedPin<Input>>,
+
+    pub adc_transfer:
+        Transfer<StreamX<DMA2, 0>, 0, Adc<ADC1>, PeripheralToMemory, &'static mut [u16; 4]>,
 }

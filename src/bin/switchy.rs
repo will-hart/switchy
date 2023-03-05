@@ -14,15 +14,32 @@ use stm32f4xx_hal as hal;
 use heapless::{mpmc::Q32, spsc::{Consumer, Producer, Queue}};
 use switch_hal::{ActiveHigh, OutputSwitch, Switch};
 use usb_device::class_prelude::UsbBusAllocator;
-use hal::{timer::{fugit, MonoTimerUs}, gpio::{ErasedPin, Output}};
+use hal::{
+    adc::Adc,
+    dma::{PeripheralToMemory, StreamX,  Transfer},
+    gpio::{ErasedPin, Input, Output},
+    pac::{ADC1, DMA2},
+    timer::{fugit, MonoTimerUs}
+};
+use rotary_encoder_hal::Rotary;
 
-use switchy_rtic::{usb::{interface::UsbInterface, command::{KeyAction, Command}}, configure};
+use switchy_rtic::{
+    usb::{
+        interface::UsbInterface,
+        command::{KeyAction, Command}
+    },
+    configure
+};
+use shift_register_hal::ShiftRegister;
 
-/// The period between changing the USB HID keyboard report
+/// The period between changing the USB HID keyboard report in ms
 pub const USB_QUEUE_CONSUMPTION_DELAY_MS: u32 = 10;
 
-/// The period for querying the inputs
+/// The period for querying the inputs in us
 pub const INPUT_POLL_PERIOD_US: u32 = 10;
+
+/// The period for sampling the ADCs in ms
+pub const ADC_POLL_PERIOD_MS: u32 = 15;
 
 #[rtic::app(
     device = stm32f4xx_hal::pac,
@@ -30,9 +47,6 @@ pub const INPUT_POLL_PERIOD_US: u32 = 10;
     dispatchers = [EXTI1]
 )]
 mod app {
-    use hal::gpio::Input;
-    use shift_register_hal::ShiftRegister;
-
     use super::*;
 
     #[monotonic(binds = TIM2, default = true)]
@@ -46,6 +60,9 @@ mod app {
 
         /// The USB interface used
         usb: UsbInterface<'static>,
+
+        /// The ADC transfer used to read ADC data from DMA
+        adc_transfer: Transfer<StreamX<DMA2, 0>, 0, Adc<ADC1>, PeripheralToMemory, &'static mut[u16;4]>,
     }
 
     // Local resources go here
@@ -68,11 +85,22 @@ mod app {
         /// The shift registers
         bank1: ShiftRegister<16, ErasedPin<Input>, ErasedPin<Output>>,
         bank2: ShiftRegister<16, ErasedPin<Input>, ErasedPin<Output>>,
+
+        // The encoders
+        encoder1: Rotary<ErasedPin<Input>, ErasedPin<Input>>,
+        encoder2: Rotary<ErasedPin<Input>, ErasedPin<Input>>,
+        encoder3: Rotary<ErasedPin<Input>, ErasedPin<Input>>,
+        encoder4: Rotary<ErasedPin<Input>, ErasedPin<Input>>,
+
+        // The ADC buffer
+        #[cfg(feature = "joysticks")]
+        adc_buffer: Option<&'static mut [u16; 4]>,
     }
 
     #[init(local = [
         USB_BUS: Option<UsbBusAllocator<stm32f4xx_hal::otg_fs::UsbBusType>> = None, 
         USB_MEM: [u32; 1024] = [0; 1024],
+        adc_buffer_raw: [u16; 4] = [0; 4],
         action_queue: Queue<KeyAction, 32> = Queue::new(),
     ])]
     fn init(cx: init::Context) -> (Shared, Local, init::Monotonics) {
@@ -95,10 +123,14 @@ mod app {
         #[cfg(any(feature = "dev_board", feature = "board_rev_3", feature = "board_rev_2"))]
         poll_registers::spawn_after(fugit::ExtU32::micros(INPUT_POLL_PERIOD_US)).unwrap();
 
+        #[cfg(feature = "joysticks")]
+        poll_adcs::spawn_after(fugit::ExtU32::millis(ADC_POLL_PERIOD_MS)).unwrap();
+
         (
             Shared {
                 command_queue: Q32::new(),
                 usb: config.usb,
+                adc_transfer: config.adc_transfer
             },
             Local {
                 #[cfg(any(feature = "dev_board", feature = "board_rev_3"))]
@@ -112,12 +144,20 @@ mod app {
 
                 bank1: config.bank1,
                 bank2: config.bank2,
+
+                encoder1: config.encoder1,
+                encoder2: config.encoder2,
+                encoder3: config.encoder3,
+                encoder4: config.encoder4,
+
+                #[cfg(feature = "joysticks")]
+                adc_buffer: Some(cx.local.adc_buffer_raw),
             },
             init::Monotonics(config.timer),
         )
     }
     
-    #[task(local = [action_sender, bank1, bank2])]
+    #[task(local = [action_sender, bank1, bank2, encoder1, encoder2, encoder3, encoder4])]
     fn poll_registers(cx: poll_registers::Context) {
         defmt::info!("POLLING");
 
@@ -133,6 +173,19 @@ mod app {
 
         poll_registers::spawn_after(fugit::ExtU32::micros(INPUT_POLL_PERIOD_US)).unwrap();
     }
+
+    #[cfg(feature = "joysticks")]
+    #[task(shared = [adc_transfer])]
+    fn poll_adcs(mut cx: poll_adcs::Context) {
+        cx.shared.adc_transfer.lock(|transfer| {
+            transfer.start(|adc| {
+                adc.start_conversion();
+            })
+        });
+
+        poll_adcs::spawn_after(fugit::ExtU32::millis(ADC_POLL_PERIOD_MS)).unwrap();
+    }
+
     
     #[task(binds = OTG_FS, shared = [usb, command_queue])]
     fn usb_interrupt(mut cx: usb_interrupt::Context) {
@@ -182,6 +235,25 @@ mod app {
 
         // requeue the action
         send_actions_to_pc::spawn_after(fugit::ExtU32::millis(USB_QUEUE_CONSUMPTION_DELAY_MS)).unwrap();
+    }
+
+    #[cfg(feature = "joysticks")]
+    #[task(binds = DMA1_STREAM0, shared = [adc_transfer], local = [adc_buffer])]
+    fn dma_interrupt(cx: dma_interrupt::Context) {
+        let dma_interrupt::Context { mut shared, local } = cx;
+
+        let buffer = shared.adc_transfer.lock(|transfer| {
+            let (buffer, _ ) = transfer.next_transfer(local.adc_buffer.take().unwrap()).unwrap();
+            buffer
+        });
+
+        let joy1x_adc = buffer[0];
+        let joy1y_adc = buffer[1];
+        let joy2x_adc = buffer[2];
+        let joy2y_adc = buffer[3];
+        *local.adc_buffer = Some(buffer);
+
+        defmt::info!("J1X {}, J1Y {}, J2X {}, J2Y {}", joy1x_adc, joy1y_adc, joy2x_adc, joy2y_adc);
     }
 
     #[cfg(any(feature = "dev_board", feature = "board_rev_3"))]
