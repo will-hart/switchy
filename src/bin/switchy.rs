@@ -18,7 +18,6 @@ use hal::{timer::{fugit, MonoTimerUs}, gpio::{ErasedPin, Output}};
 
 use switchy_rtic::{usb::{interface::UsbInterface, command::{KeyAction, Command}}, configure};
 
-
 /// The period between changing the USB HID keyboard report
 pub const USB_QUEUE_CONSUMPTION_DELAY_MS: u32 = 10;
 

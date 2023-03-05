@@ -7,12 +7,36 @@ use hal::{
     prelude::*,
     timer::MonoTimerUs,
 };
+use rotary_encoder_hal::Rotary;
 use shift_register_hal::ShiftRegister;
 use stm32f4xx_hal as hal;
 use switch_hal::{ActiveHigh, IntoSwitch, Switch};
 use usb_device::class_prelude::UsbBusAllocator;
 
 use crate::usb::interface::UsbInterface;
+
+macro_rules! encoder {
+    ($pin_a: expr, $pin_b: expr) => {{
+        Rotary::new(
+            $pin_a.into_pull_up_input().erase(),
+            $pin_b.into_pull_up_input().erase(),
+        )
+    }};
+}
+
+macro_rules! shift_register {
+    ($clk_pin: expr, $latch_pin: expr, $data_pin: expr) => {{
+        ShiftRegister::new(
+            $clk_pin
+                .into_push_pull_output_in_state(PinState::High)
+                .erase(),
+            $latch_pin
+                .into_push_pull_output_in_state(PinState::High)
+                .erase(),
+            $data_pin.into_input().erase(),
+        )
+    }};
+}
 
 /// Configures the micro for operation
 pub fn configure<'a>(
@@ -75,29 +99,12 @@ pub fn configure<'a>(
     let usb_allocator = usb_alloc.as_ref().unwrap();
 
     // setup the shift registers
-    let bank1 = ShiftRegister::new(
-        gpiob
-            .pb3
-            .into_push_pull_output_in_state(PinState::High)
-            .erase(),
-        gpiob
-            .pb5
-            .into_push_pull_output_in_state(PinState::High)
-            .erase(),
-        gpiob.pb4.into_input().erase(),
-    );
-
-    let bank2 = ShiftRegister::new(
-        gpioc
-            .pc10
-            .into_push_pull_output_in_state(PinState::High)
-            .erase(),
-        gpioc
-            .pc11
-            .into_push_pull_output_in_state(PinState::High)
-            .erase(),
-        gpioc.pc12.into_input().erase(),
-    );
+    let bank1 = shift_register!(gpiob.pb3, gpiob.pb5, gpiob.pb4);
+    let bank2 = shift_register!(gpioc.pc10, gpioc.pc11, gpioc.pc12);
+    let encoder1 = encoder!(gpiob.pb12, gpiob.pb13);
+    let encoder2 = encoder!(gpiob.pb14, gpiob.pb15);
+    let encoder3 = encoder!(gpioc.pc7, gpioc.pc6);
+    let encoder4 = encoder!(gpioc.pc9, gpioc.pc8);
 
     Configuration {
         usb: UsbInterface::new(usb_allocator),
@@ -106,6 +113,11 @@ pub fn configure<'a>(
 
         bank1,
         bank2,
+
+        encoder1,
+        encoder2,
+        encoder3,
+        encoder4,
     }
 }
 
@@ -116,4 +128,9 @@ pub struct Configuration<'a> {
 
     pub bank1: ShiftRegister<16, ErasedPin<Input>, ErasedPin<Output>>,
     pub bank2: ShiftRegister<16, ErasedPin<Input>, ErasedPin<Output>>,
+
+    pub encoder1: Rotary<ErasedPin<Input>, ErasedPin<Input>>,
+    pub encoder2: Rotary<ErasedPin<Input>, ErasedPin<Input>>,
+    pub encoder3: Rotary<ErasedPin<Input>, ErasedPin<Input>>,
+    pub encoder4: Rotary<ErasedPin<Input>, ErasedPin<Input>>,
 }
