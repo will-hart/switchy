@@ -15,14 +15,15 @@ use heapless::{mpmc::Q32, spsc::{Consumer, Producer, Queue}};
 use switch_hal::{ActiveHigh, OutputSwitch, Switch};
 use usb_device::class_prelude::UsbBusAllocator;
 use hal::{timer::{fugit, MonoTimerUs}, gpio::{ErasedPin, Output}};
+
 use switchy_rtic::{usb::{interface::UsbInterface, command::{KeyAction, Command}}, configure};
 
-/// The delay in seconds for spawning the test key presses
-/// TODO: remove
-pub const KEY_SPAWN_DELAY_SEC: u32 = 1;
 
 /// The period between changing the USB HID keyboard report
 pub const USB_QUEUE_CONSUMPTION_DELAY_MS: u32 = 10;
+
+/// The period for querying the inputs
+pub const INPUT_POLL_PERIOD_US: u32 = 10;
 
 #[rtic::app(
     device = stm32f4xx_hal::pac,
@@ -30,6 +31,9 @@ pub const USB_QUEUE_CONSUMPTION_DELAY_MS: u32 = 10;
     dispatchers = [EXTI1]
 )]
 mod app {
+    use hal::gpio::Input;
+    use shift_register_hal::ShiftRegister;
+
     use super::*;
 
     #[monotonic(binds = TIM2, default = true)]
@@ -61,6 +65,10 @@ mod app {
         /// The current state of the blinky light
         #[cfg(any(feature = "dev_board", feature = "board_rev_3"))]
         led_state: bool,
+
+        /// The shift registers
+        bank1: ShiftRegister<16, ErasedPin<Input>, ErasedPin<Output>>,
+        bank2: ShiftRegister<16, ErasedPin<Input>, ErasedPin<Output>>,
     }
 
     #[init(local = [
@@ -81,11 +89,12 @@ mod app {
         #[cfg(any(feature = "dev_board", feature = "board_rev_3"))]
         blink::spawn_after(fugit::ExtU32::secs(1u32)).unwrap();
 
-        // for testing
-        spawn_action::spawn_after(fugit::ExtU32::secs(KEY_SPAWN_DELAY_SEC)).unwrap();
-        
         // forward actions from the queue
         send_actions_to_pc::spawn_after(fugit::ExtU32::millis(USB_QUEUE_CONSUMPTION_DELAY_MS)).unwrap();
+
+        // scan inputs
+        #[cfg(any(feature = "dev_board", feature = "board_rev_3", feature = "board_rev_2"))]
+        poll_registers::spawn_after(fugit::ExtU32::micros(INPUT_POLL_PERIOD_US)).unwrap();
 
         (
             Shared {
@@ -101,32 +110,36 @@ mod app {
                 action_sender,
                 action_receiver,
                 current_action: None,
+
+                bank1: config.bank1,
+                bank2: config.bank2,
             },
             init::Monotonics(config.timer),
         )
     }
     
-    /// Periodically spawn a key press - for testing and dev, in reality this should
-    /// monitor the buttons and queue up actions as required
-    #[task(local = [action_sender])]
-    fn spawn_action(cx: spawn_action::Context) {
-        match cx.local.action_sender.enqueue(KeyAction::new(0, 52)) {
-            Ok(_) => {
-                defmt::println!("Spawned action");
-            },
-            Err(key_action) => { 
-                defmt::error!("Failed to queue {} / {} dropping", key_action.modifiers, key_action.key ); 
-            }
+    #[task(local = [action_sender, bank1, bank2])]
+    fn poll_registers(cx: poll_registers::Context) {
+        defmt::info!("POLLING");
+
+        let bank1 = cx.local.bank1;
+        if let Some(value) = bank1.poll() {
+            defmt::info!("Received bank1 value {}", value);
         }
 
-        spawn_action::spawn_after(fugit::ExtU32::secs(KEY_SPAWN_DELAY_SEC)).unwrap();
-    }
+        let bank2 = cx.local.bank2;
+        if let Some(value) = bank2.poll() {
+            defmt::warn!("Received bank2 value {}", value);
+        }
 
+        poll_registers::spawn_after(fugit::ExtU32::micros(INPUT_POLL_PERIOD_US)).unwrap();
+    }
+    
     #[task(binds = OTG_FS, shared = [usb, command_queue])]
     fn usb_interrupt(mut cx: usb_interrupt::Context) {
         cx.shared.usb.lock(|u| {
             if u.poll() {
-                defmt::info!("DATA AVAILABLE");
+                defmt::warn!("DATA AVAILABLE");
             }
         });
     }
@@ -175,14 +188,16 @@ mod app {
     #[cfg(any(feature = "dev_board", feature = "board_rev_3"))]
     #[task(local = [led_pin, led_state])]
     fn blink(cx: blink::Context) {
+        defmt::warn!("BLINK");
+
         if *cx.local.led_state {
             cx.local.led_pin.off().ok();
             *cx.local.led_state = false;
-            blink::spawn_after(fugit::ExtU32::millis(500)).unwrap();
+            blink::spawn_after(fugit::ExtU32::millis(300)).unwrap();
         } else {
             cx.local.led_pin.on().ok();
             *cx.local.led_state = true;
-            blink::spawn_after(fugit::ExtU32::millis(1500)).unwrap();
+            blink::spawn_after(fugit::ExtU32::millis(300)).unwrap();
         }
     }
 }

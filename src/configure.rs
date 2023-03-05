@@ -1,12 +1,13 @@
 //! Configures the microcontroller for use and returns the requried pins
 
 use hal::{
-    gpio::{ErasedPin, Output},
+    gpio::{ErasedPin, Input, Output, PinState},
     otg_fs::{UsbBusType, USB},
     pac::{self, TIM2},
     prelude::*,
     timer::MonoTimerUs,
 };
+use shift_register_hal::ShiftRegister;
 use stm32f4xx_hal as hal;
 use switch_hal::{ActiveHigh, IntoSwitch, Switch};
 use usb_device::class_prelude::UsbBusAllocator;
@@ -42,7 +43,7 @@ pub fn configure<'a>(
 
     // Acquire GPIO
     let gpioa = device_peripherals.GPIOA.split();
-    // let gpiob = device_peripherals.GPIOB.split();
+    let gpiob = device_peripherals.GPIOB.split();
     let gpioc = device_peripherals.GPIOC.split();
 
     // set up the flashy LED
@@ -73,10 +74,38 @@ pub fn configure<'a>(
     *usb_alloc = Some(UsbBusType::new(usb, usb_mem));
     let usb_allocator = usb_alloc.as_ref().unwrap();
 
+    // setup the shift registers
+    let bank1 = ShiftRegister::new(
+        gpiob
+            .pb3
+            .into_push_pull_output_in_state(PinState::High)
+            .erase(),
+        gpiob
+            .pb5
+            .into_push_pull_output_in_state(PinState::High)
+            .erase(),
+        gpiob.pb4.into_input().erase(),
+    );
+
+    let bank2 = ShiftRegister::new(
+        gpioc
+            .pc10
+            .into_push_pull_output_in_state(PinState::High)
+            .erase(),
+        gpioc
+            .pc11
+            .into_push_pull_output_in_state(PinState::High)
+            .erase(),
+        gpioc.pc12.into_input().erase(),
+    );
+
     Configuration {
         usb: UsbInterface::new(usb_allocator),
         led_pin,
         timer,
+
+        bank1,
+        bank2,
     }
 }
 
@@ -84,4 +113,7 @@ pub struct Configuration<'a> {
     pub led_pin: Switch<ErasedPin<Output>, ActiveHigh>,
     pub timer: MonoTimerUs<TIM2>,
     pub usb: UsbInterface<'a>,
+
+    pub bank1: ShiftRegister<16, ErasedPin<Input>, ErasedPin<Output>>,
+    pub bank2: ShiftRegister<16, ErasedPin<Input>, ErasedPin<Output>>,
 }

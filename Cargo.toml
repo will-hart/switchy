@@ -6,14 +6,15 @@ version = "0.1.0"
 default-run = "switchy"
 
 [workspace]
-members = ["testsuite"]
+members = ["testsuite", "shift_register_hal"]
 
 [[bin]]
 name = "switchy"
 path = "src/bin/switchy.rs"
 
 [features]
-default = ["dev_board"]
+default = ["dev_board", "logging"]
+logging = ["shift_register_hal/logging"]
 dev_board = []
 board_rev_1_or_2 = []
 board_rev_3 = []
@@ -30,6 +31,8 @@ heapless = "0.7.16"
 switch-hal = "0.4.0"
 usb-device = { version = "0.2.9", features = ["defmt"] }
 usbd-hid = "0.6.1"
+
+shift_register_hal = { path = "./shift_register_hal", default-features = false }
 
 [dependencies.serde]
 version="1"
