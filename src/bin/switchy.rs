@@ -21,7 +21,7 @@ use hal::{
     pac::{ADC1, DMA2},
     timer::{fugit, MonoTimerUs}
 };
-use rotary_encoder_hal::Rotary;
+use rotary_encoder_hal::{Direction, Rotary};
 
 use switchy_rtic::{
     usb::{
@@ -44,7 +44,7 @@ pub const ADC_POLL_PERIOD_MS: u32 = 15;
 #[rtic::app(
     device = stm32f4xx_hal::pac,
     peripherals = true,
-    dispatchers = [EXTI1]
+    dispatchers = [EXTI1, EXTI2]
 )]
 mod app {
     use super::*;
@@ -58,6 +58,9 @@ mod app {
         /// Used to queue up commands received from the PC for processing
         command_queue: Q32<Command>,
 
+        /// Used to queue actions from the switchy through the USB HID to the PC
+        action_sender: Producer<'static, KeyAction, 32>,
+
         /// The USB interface used
         usb: UsbInterface<'static>,
 
@@ -68,28 +71,32 @@ mod app {
     // Local resources go here
     #[local]
     struct Local {
-        /// Used to queue actions from the switchy through the USB HID to the PC
-        action_sender: Producer<'static, KeyAction, 32>,
         /// Used by the report sending task to read actions that should be queued
         action_receiver: Consumer<'static, KeyAction, 32>,
         /// The current action that was just sent, or None if no action was recently sent
         current_action: Option<KeyAction>,
 
         /// The LED pin for blinky lights
-        #[cfg(any(feature = "dev_board", feature = "board_rev_3"))]
+        #[cfg(feature = "blink")]
         led_pin: Switch<ErasedPin<Output>, ActiveHigh>,
         /// The current state of the blinky light
         #[cfg(any(feature = "dev_board", feature = "board_rev_3"))]
         led_state: bool,
 
         /// The shift registers
+        #[cfg(feature = "buttons")]
         bank1: ShiftRegister<16, ErasedPin<Input>, ErasedPin<Output>>,
+        #[cfg(feature = "buttons")]
         bank2: ShiftRegister<16, ErasedPin<Input>, ErasedPin<Output>>,
 
         // The encoders
+        #[cfg(feature = "encoders")]
         encoder1: Rotary<ErasedPin<Input>, ErasedPin<Input>>,
+        #[cfg(feature = "encoders")]
         encoder2: Rotary<ErasedPin<Input>, ErasedPin<Input>>,
+        #[cfg(feature = "encoders")]
         encoder3: Rotary<ErasedPin<Input>, ErasedPin<Input>>,
+        #[cfg(feature = "encoders")]
         encoder4: Rotary<ErasedPin<Input>, ErasedPin<Input>>,
 
         // The ADC buffer
@@ -108,46 +115,70 @@ mod app {
 
         // configure all the clocks and peripherals
         let config = configure::configure(cx.core, cx.device, cx.local.USB_BUS, cx.local.USB_MEM);
+        defmt::println!("configured");
 
         // configure the message passing queues
         let (action_sender, action_receiver) = cx.local.action_queue.split();
 
-        // show a blinky light
-        #[cfg(any(feature = "dev_board", feature = "board_rev_3"))]
-        blink::spawn_after(fugit::ExtU32::secs(1u32)).unwrap();
-
         // forward actions from the queue
         send_actions_to_pc::spawn_after(fugit::ExtU32::millis(USB_QUEUE_CONSUMPTION_DELAY_MS)).unwrap();
+        defmt::println!("spawned send action to PC");
+
+        // show a blinky light
+        #[cfg(feature = "blink")]
+        {
+            blink::spawn_after(fugit::ExtU32::secs(1u32)).unwrap();
+            defmt::println!("spawned blink");
+        }
 
         // scan inputs
-        #[cfg(any(feature = "dev_board", feature = "board_rev_3", feature = "board_rev_2"))]
-        poll_registers::spawn_after(fugit::ExtU32::micros(INPUT_POLL_PERIOD_US)).unwrap();
+        #[cfg(feature = "buttons")]
+        {
+            poll_registers::spawn_after(fugit::ExtU32::micros(INPUT_POLL_PERIOD_US)).unwrap();
+            defmt::println!("spawned poll registers");
+        }
 
-        #[cfg(feature = "joysticks")]
-        poll_adcs::spawn_after(fugit::ExtU32::millis(ADC_POLL_PERIOD_MS)).unwrap();
+        // scan inputs
+        #[cfg(feature = "encoders")]
+        {
+            poll_encoders::spawn_after(fugit::ExtU32::micros(INPUT_POLL_PERIOD_US)).unwrap();
+            defmt::println!("spawned poll encoders");
+        }
+
+        #[cfg(feature = "joysticks")] 
+        {
+            poll_adcs::spawn_after(fugit::ExtU32::millis(ADC_POLL_PERIOD_MS)).unwrap();
+            defmt::println!("spawned joysticks");
+        }
 
         (
             Shared {
                 command_queue: Q32::new(),
                 usb: config.usb,
-                adc_transfer: config.adc_transfer
+                adc_transfer: config.adc_transfer,
+                action_sender,
             },
             Local {
-                #[cfg(any(feature = "dev_board", feature = "board_rev_3"))]
+                #[cfg(feature = "blink")]
                 led_pin: config.led_pin,
-                #[cfg(any(feature = "dev_board", feature = "board_rev_3"))]
+                #[cfg(feature = "blink")]
                 led_state: false,
 
-                action_sender,
                 action_receiver,
                 current_action: None,
 
+                #[cfg(feature = "buttons")]
                 bank1: config.bank1,
+                #[cfg(feature = "buttons")]
                 bank2: config.bank2,
 
+                #[cfg(feature = "encoders")]
                 encoder1: config.encoder1,
+                #[cfg(feature = "encoders")]
                 encoder2: config.encoder2,
+                #[cfg(feature = "encoders")]
                 encoder3: config.encoder3,
+                #[cfg(feature = "encoders")]
                 encoder4: config.encoder4,
 
                 #[cfg(feature = "joysticks")]
@@ -157,41 +188,103 @@ mod app {
         )
     }
     
-    #[task(local = [action_sender, bank1, bank2, encoder1, encoder2, encoder3, encoder4])]
-    fn poll_registers(cx: poll_registers::Context) {
-        defmt::info!("POLLING");
+    #[task(local = [bank1, bank2], shared = [action_sender], priority = 2)]
+    fn poll_registers(_cx: poll_registers::Context) {
+        defmt::debug!("POLLING REGISTERS");
 
-        let bank1 = cx.local.bank1;
-        if let Some(value) = bank1.poll() {
-            defmt::info!("Received bank1 value {}", value);
+        #[cfg(feature = "buttons")]
+        {
+
+            let bank1 = _cx.local.bank1;
+            if let Some(value) = bank1.poll() {
+                defmt::info!("Received bank1 value {}", value);
+            }
+
+            let bank2 = _cx.local.bank2;
+            if let Some(value) = bank2.poll() {
+                defmt::warn!("Received bank2 value {}", value);
+            }
+
+            poll_registers::spawn_after(fugit::ExtU32::micros(INPUT_POLL_PERIOD_US)).unwrap();
         }
-
-        let bank2 = cx.local.bank2;
-        if let Some(value) = bank2.poll() {
-            defmt::warn!("Received bank2 value {}", value);
-        }
-
-        poll_registers::spawn_after(fugit::ExtU32::micros(INPUT_POLL_PERIOD_US)).unwrap();
     }
 
-    #[cfg(feature = "joysticks")]
-    #[task(shared = [adc_transfer])]
-    fn poll_adcs(mut cx: poll_adcs::Context) {
-        cx.shared.adc_transfer.lock(|transfer| {
-            transfer.start(|adc| {
-                adc.start_conversion();
-            })
-        });
+    #[task(local = [encoder1, encoder2, encoder3, encoder4], shared = [action_sender], priority = 2)]
+    fn poll_encoders(_cx: poll_encoders::Context) {
+        defmt::debug!("POLLING ENCODERS");
+        
+        #[cfg(any(feature = "encoders"))]
+        {
+            match _cx.local.encoder1.update() {
+                Ok(dir) => {
+                    defmt::info!("Received encoder {}", match dir {
+                        Direction::Clockwise => "clockwise",
+                        Direction::CounterClockwise => "counter-clockwise",
+                        Direction::None => "none"
+                    });
+                }
+                Err(_) => { defmt::error!("Received an error from encoder 1"); },
+            }
 
-        poll_adcs::spawn_after(fugit::ExtU32::millis(ADC_POLL_PERIOD_MS)).unwrap();
+            match _cx.local.encoder2.update() {
+                Ok(dir) => {
+                    defmt::info!("Received encoder {}", match dir {
+                        Direction::Clockwise => "clockwise",
+                        Direction::CounterClockwise => "counter-clockwise",
+                        Direction::None => "none"
+                    });
+                }
+                Err(_) => { defmt::error!("Received an error from encoder 2"); },
+            }
+
+            match _cx.local.encoder3.update() {
+                Ok(dir) => {
+                    defmt::info!("Received encoder {}", match dir {
+                        Direction::Clockwise => "clockwise",
+                        Direction::CounterClockwise => "counter-clockwise",
+                        Direction::None => "none"
+                    });
+                }
+                Err(_) => { defmt::error!("Received an error from encoder 3"); },
+            }
+
+            match _cx.local.encoder4.update() {
+                Ok(dir) => {
+                    defmt::info!("Received encoder {}", match dir {
+                        Direction::Clockwise => "clockwise",
+                        Direction::CounterClockwise => "counter-clockwise",
+                        Direction::None => "none"
+                    });
+                }
+                Err(_) => { defmt::error!("Received an error from encoder 4"); },
+            }
+
+            poll_encoders::spawn_after(fugit::ExtU32::micros(INPUT_POLL_PERIOD_US)).unwrap();
+        }
     }
 
-    
-    #[task(binds = OTG_FS, shared = [usb, command_queue])]
+
+    #[task(shared = [adc_transfer], priority = 1)]
+    fn poll_adcs(mut _cx: poll_adcs::Context) {
+        defmt::debug!("Poll ADCs (for joysticks)");
+
+        #[cfg(feature = "joysticks")]
+        {
+            _cx.shared.adc_transfer.lock(|transfer| {
+                transfer.start(|adc| {
+                    adc.start_conversion();
+                })
+            });
+
+            poll_adcs::spawn_after(fugit::ExtU32::millis(ADC_POLL_PERIOD_MS)).unwrap();
+        }
+    }
+
+    #[task(binds = OTG_FS, shared = [usb, command_queue], priority = 5)]
     fn usb_interrupt(mut cx: usb_interrupt::Context) {
         cx.shared.usb.lock(|u| {
             if u.poll() {
-                defmt::warn!("DATA AVAILABLE");
+                defmt::debug!("DATA AVAILABLE");
             }
         });
     }
@@ -199,7 +292,7 @@ mod app {
     /// Perioidically monitor the action queue and send on at a time
     #[task(
         local = [action_receiver, current_action], 
-        shared = [usb]
+        shared = [usb], priority = 1
     )]
     fn send_actions_to_pc(mut cx: send_actions_to_pc::Context) {
         let changed = match cx.local.current_action {
@@ -237,37 +330,42 @@ mod app {
         send_actions_to_pc::spawn_after(fugit::ExtU32::millis(USB_QUEUE_CONSUMPTION_DELAY_MS)).unwrap();
     }
 
-    #[cfg(feature = "joysticks")]
-    #[task(binds = DMA1_STREAM0, shared = [adc_transfer], local = [adc_buffer])]
-    fn dma_interrupt(cx: dma_interrupt::Context) {
-        let dma_interrupt::Context { mut shared, local } = cx;
+    #[task(binds = DMA1_STREAM0, shared = [adc_transfer], local = [adc_buffer], priority = 3)]
+    fn dma_interrupt(_cx: dma_interrupt::Context) {
+        defmt::debug!("DMA interrupt");
 
-        let buffer = shared.adc_transfer.lock(|transfer| {
-            let (buffer, _ ) = transfer.next_transfer(local.adc_buffer.take().unwrap()).unwrap();
-            buffer
-        });
+        #[cfg(feature = "joysticks")]
+        {
+            let dma_interrupt::Context { mut shared, local } = _cx;
 
-        let joy1x_adc = buffer[0];
-        let joy1y_adc = buffer[1];
-        let joy2x_adc = buffer[2];
-        let joy2y_adc = buffer[3];
-        *local.adc_buffer = Some(buffer);
+            let buffer = shared.adc_transfer.lock(|transfer| {
+                let (buffer, _ ) = transfer.next_transfer(local.adc_buffer.take().unwrap()).unwrap();
+                buffer
+            });
 
-        defmt::info!("J1X {}, J1Y {}, J2X {}, J2Y {}", joy1x_adc, joy1y_adc, joy2x_adc, joy2y_adc);
+            let joy1x_adc = buffer[0];
+            let joy1y_adc = buffer[1];
+            let joy2x_adc = buffer[2];
+            let joy2y_adc = buffer[3];
+            *local.adc_buffer = Some(buffer);
+
+            defmt::info!("J1X {}, J1Y {}, J2X {}, J2Y {}", joy1x_adc, joy1y_adc, joy2x_adc, joy2y_adc);
+        }
     }
 
-    #[cfg(any(feature = "dev_board", feature = "board_rev_3"))]
-    #[task(local = [led_pin, led_state])]
-    fn blink(cx: blink::Context) {
-        defmt::warn!("BLINK");
+    #[task(local = [led_pin, led_state], priority = 1)]
+    fn blink(_cx: blink::Context) {
+        defmt::debug!("BLINK");
 
-        if *cx.local.led_state {
-            cx.local.led_pin.off().ok();
-            *cx.local.led_state = false;
-            blink::spawn_after(fugit::ExtU32::millis(300)).unwrap();
-        } else {
-            cx.local.led_pin.on().ok();
-            *cx.local.led_state = true;
+        #[cfg(any(feature = "dev_board", feature = "board_rev_3"))]
+        {
+            if *_cx.local.led_state {
+                _cx.local.led_pin.off().ok();
+            } else {
+                _cx.local.led_pin.on().ok();
+            }
+            
+            *_cx.local.led_state = !*_cx.local.led_state;
             blink::spawn_after(fugit::ExtU32::millis(300)).unwrap();
         }
     }

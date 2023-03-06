@@ -82,7 +82,12 @@ where
     /// depends on the device, refer to the datasheet.
     pub fn poll(&mut self) -> Option<u32> {
         #[cfg(feature = "logging")]
-        defmt::warn!("{}", self);
+        defmt::warn!(
+            "bit {}, current 0x{:x}, previous 0x{:x}",
+            self.current_bit,
+            self.current_value,
+            self.previous_value
+        );
 
         match (
             self.latch_pin.is_set_low().ok(),
