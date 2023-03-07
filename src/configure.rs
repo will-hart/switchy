@@ -127,13 +127,13 @@ pub fn configure<'a>(
         .dma(Dma::Continuous)
         .scan(Scan::Enabled);
     let mut adc = Adc::adc1(device_peripherals.ADC1, true, adc_config);
-    adc.configure_channel(&joy1x, Sequence::One, SampleTime::Cycles_112);
-    adc.configure_channel(&joy1y, Sequence::Two, SampleTime::Cycles_112);
-    adc.configure_channel(&joy2x, Sequence::Three, SampleTime::Cycles_112);
-    adc.configure_channel(&joy2y, Sequence::Four, SampleTime::Cycles_112);
+    adc.configure_channel(&joy1x, Sequence::One, SampleTime::Cycles_56);
+    adc.configure_channel(&joy1y, Sequence::Two, SampleTime::Cycles_56);
+    adc.configure_channel(&joy2x, Sequence::Three, SampleTime::Cycles_56);
+    adc.configure_channel(&joy2y, Sequence::Four, SampleTime::Cycles_56);
     adc.enable();
 
-    let first_buffer = cortex_m::singleton!(: [u16;4] = [0;4]).unwrap();
+    let first_buffer = cortex_m::singleton!(: [u16; 4] = [0; 4]).unwrap();
     let transfer = Transfer::init_peripheral_to_memory(dma.0, adc, first_buffer, None, dma_config);
 
     Configuration {

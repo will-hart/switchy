@@ -15,8 +15,8 @@ path = "src/bin/switchy.rs"
 [features]
 default = ["dev_board"]
 
-dev_board = ["blink", "buttons", "encoders", "joysticks", "logging"]
-board_rev_1_or_2 =  ["blink", "buttons", "encoders", "joysticks"]
+dev_board = ["blink", "buttons", "encoders", "logging"] # "joysticks"
+board_rev_1_or_2 =  ["buttons", "encoders", "joysticks"]
 board_rev_3 =  ["blink", "buttons", "encoders", "joysticks"]
 
 blink = []

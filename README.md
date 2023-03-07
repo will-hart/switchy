@@ -18,6 +18,12 @@ To program the device plug in the STlink and run:
 cargo rr
 ```
 
+To set the defmt level filter in powershell, write:
+
+```powershell
+$env:DEFMT_LOG = 'debug'; cargo r 
+```
+
 > Depending on your target device, change the `runner` section in
 > `.cargo/config` to match your device. It defaults to the MCU used in a "black
 > pill".
