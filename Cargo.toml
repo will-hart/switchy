@@ -13,7 +13,7 @@ name = "switchy"
 path = "src/bin/switchy.rs"
 
 [features]
-default = ["dev_board"]
+default = ["board_rev_1_or_2"]
 
 dev_board = ["blink", "buttons", "encoders", "logging"] # "joysticks"
 board_rev_1_or_2 =  ["buttons", "encoders", "joysticks"]

@@ -14,7 +14,7 @@ use stm32f4xx_hal as hal;
 use heapless::{mpmc::Q32, spsc::{Consumer, Producer, Queue}};
 use switch_hal::{ActiveHigh, Switch};
 
-#[cfg(feature = "buttons")]
+#[cfg(feature = "blinky")]
 use switch_hal::OutputSwitch;
 
 use usb_device::class_prelude::UsbBusAllocator;
@@ -205,12 +205,12 @@ mod app {
 
             let bank1 = _cx.local.bank1;
             if let Some(value) = bank1.poll() {
-                defmt::info!("Received bank1 value {}", value);
+                defmt::debug!("Received changed bank1 value {:b} with changed bits {:b}", value, bank1.changed_bits());
             }
 
             let bank2 = _cx.local.bank2;
             if let Some(value) = bank2.poll() {
-                defmt::info!("Received bank2 value {}", value);
+                defmt::debug!("Received bank2 value {:b}", value);
             }
 
             poll_registers::spawn_after(fugit::ExtU32::micros(INPUT_POLL_PERIOD_US)).unwrap();

@@ -1,6 +1,6 @@
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
-# runner = "probe-run --chip STM32F401RCTx" # Rev 1+ board
-runner = "probe-run --chip STM32F401CBUx" # Dev board
+runner = "probe-run --chip STM32F401RCTx" # Rev 1+ board
+# runner = "probe-run --chip STM32F401CBUx" # Dev board
 rustflags = [
   "-C", "linker=flip-link",
   "-C", "link-arg=-Tlink.x",
