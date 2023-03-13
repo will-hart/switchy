@@ -205,12 +205,12 @@ mod app {
 
             let bank1 = _cx.local.bank1;
             if let Some(value) = bank1.poll() {
-                defmt::debug!("Received changed bank1 value {:b} with changed bits {:b}", value, bank1.changed_bits());
+                defmt::debug!("Received changed bank1 value 0b{:016b}", value);
             }
 
             let bank2 = _cx.local.bank2;
             if let Some(value) = bank2.poll() {
-                defmt::debug!("Received bank2 value {:b}", value);
+                defmt::debug!("Received changed bank1 value 0b{:016b}", value);
             }
 
             poll_registers::spawn_after(fugit::ExtU32::micros(INPUT_POLL_PERIOD_US)).unwrap();
