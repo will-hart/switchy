@@ -189,8 +189,8 @@ where
                     None
                 }
             }
+            #[cfg(feature = "logging")]
             (load_pin, clock_pin) => {
-                #[cfg(feature = "logging")]
                 defmt::warn!(
                     "ShiftRegister in unexpected state - load: {} clock: {}",
                     load_pin,
@@ -199,6 +199,8 @@ where
 
                 None
             }
+            #[cfg(not(feature = "logging"))]
+            (_, _) => None,
         }
     }
 

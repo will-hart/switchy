@@ -17,11 +17,19 @@ use usbd_hid::descriptor::{gen_hid_descriptor, AsInputReport, SerializedDescript
         };
     }
 )]
+#[derive(Default)]
 pub struct CustomKeyboardReport {
     pub modifier: u8,
     pub reserved: u8,
     pub leds: u8,
     pub keycodes: [u8; 6],
+}
+
+impl CustomKeyboardReport {
+    pub fn clear(&mut self) {
+        self.modifier = 0;
+        self.keycodes = [0; 6];
+    }
 }
 
 #[gen_hid_descriptor(

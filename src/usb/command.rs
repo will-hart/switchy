@@ -29,6 +29,42 @@ impl From<[u8; 3]> for Command {
     }
 }
 
+#[derive(Copy, Clone)]
+#[cfg_attr(feature = "logging", derive(defmt::Format))]
+pub enum JoystickAxis {
+    X,
+    Y,
+}
+
+#[derive(Copy, Clone)]
+#[cfg_attr(feature = "logging", derive(defmt::Format))]
+pub enum EncoderDirection {
+    Up,
+    Down,
+}
+
+#[derive(Copy, Clone, Default)]
+#[cfg_attr(feature = "logging", derive(defmt::Format))]
+pub struct JoystickNumber(pub u8);
+
+#[derive(Copy, Clone, Default)]
+#[cfg_attr(feature = "logging", derive(defmt::Format))]
+pub struct ButtonNumber(pub u8);
+
+#[derive(Copy, Clone, Default)]
+#[cfg_attr(feature = "logging", derive(defmt::Format))]
+pub struct EncoderNumber(pub u8);
+
+#[derive(Clone, Default)]
+#[cfg_attr(feature = "logging", derive(defmt::Format))]
+pub enum UserAction {
+    #[default]
+    None,
+    Button(ButtonNumber, bool),
+    Encoder(EncoderNumber, EncoderDirection),
+    Joystick(JoystickAxis, JoystickNumber, u16),
+}
+
 /// A KeyAction is something done by a user that should be queued
 /// up and sent over the HID to the PC. It includes a key and a modifier.
 #[derive(Copy, Clone, Default)]

@@ -10,15 +10,12 @@ use usbd_hid::hid_class::HIDClass;
 
 use crate::usb::descriptor::{CommandReport, CustomKeyboardReport};
 
-use super::command::KeyAction;
-
 const USB_POLL_MS: u8 = 10;
 
 pub struct UsbInterface<'a> {
     pub hid: HIDClass<'a, UsbBus<USB>>,
     command: HIDClass<'a, UsbBus<USB>>,
     pub bus: UsbDevice<'a, UsbBus<USB>>,
-    report: CustomKeyboardReport,
 }
 
 impl<'a> UsbInterface<'a> {
@@ -30,24 +27,13 @@ impl<'a> UsbInterface<'a> {
 
         // TODO: this is a test code from pid.codes, change before release
         let bus = UsbDeviceBuilder::new(&alloc, UsbVidPid(0x1209, 0x0001))
-            .manufacturer("Atto Zepto")
+            .manufacturer("AttoZepto")
             .product("Switchy")
             .serial_number("000001")
-            .device_release(0x0020)
-            // .device_class(0x03)
+            .device_release(0x0010)
             .build();
 
-        UsbInterface {
-            hid,
-            command,
-            bus,
-            report: CustomKeyboardReport {
-                modifier: 0,
-                reserved: 0,
-                leds: 0,
-                keycodes: [0, 0, 0, 0, 0, 0],
-            },
-        }
+        UsbInterface { hid, command, bus }
     }
 
     /// Polls the USB device
@@ -68,12 +54,12 @@ impl<'a> UsbInterface<'a> {
         }
     }
 
-    /// Sends the report, if one is ready to go.
-    pub fn send_report(&mut self, action: KeyAction) -> Result<bool, usb_device::UsbError> {
-        self.report.modifier = action.modifiers;
-        self.report.keycodes[0] = action.key;
-
-        match self.hid.push_input(&self.report) {
+    /// Sends the keyboard report, if one is ready to go.
+    pub fn send_keyboard_report(
+        &mut self,
+        report: CustomKeyboardReport,
+    ) -> Result<bool, usb_device::UsbError> {
+        match self.hid.push_input(&report) {
             Ok(_) => Ok(true),
             Err(e) => {
                 defmt::println!("Error printing report {:?}", e);
