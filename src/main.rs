@@ -1,3 +1,11 @@
+//! The main firmware for the Switchy, based on cortex_m_rtic
+//!
+//! Author: William Hart, March 2023
+
+#![deny(unsafe_code)]
+#![deny(warnings)]
+#![deny(missing_docs)]
+#![no_main]
 #![no_std]
 
 use core::sync::atomic::{AtomicUsize, Ordering};
@@ -31,3 +39,5 @@ pub fn exit() -> ! {
         cortex_m::asm::bkpt();
     }
 }
+
+pub mod app;

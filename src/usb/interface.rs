@@ -1,3 +1,5 @@
+//! Contains code for configuring and polling a USB HID interface
+
 use stm32f4xx_hal::otg_fs::{UsbBus, USB};
 
 use usb_device::{
@@ -12,9 +14,13 @@ use crate::usb::descriptor::{CommandReport, CustomKeyboardReport};
 
 const USB_POLL_MS: u8 = 10;
 
+/// A container struct for the USB command and keyboard classes
 pub struct UsbInterface<'a> {
+    /// The HID keyboard class
     pub hid: HIDClass<'a, UsbBus<USB>>,
+    /// The command class for receiving commands from the computer
     command: HIDClass<'a, UsbBus<USB>>,
+    /// The USB bus
     pub bus: UsbDevice<'a, UsbBus<USB>>,
 }
 

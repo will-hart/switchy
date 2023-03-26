@@ -1,15 +1,6 @@
-//! The main firmware for the Switchy, based on cortex_m_rtic
-//!
-//! Author: William Hart, March 2023
-
-#![deny(unsafe_code)]
-#![deny(warnings)]
-#![deny(missing_docs)]
-#![no_main]
-#![no_std]
+//! The main app module for the switchy firmware
 
 use stm32f4xx_hal as hal;
-use switchy_rtic as _; // global logger + panicking-behavior + memory layout
 
 use heapless::{
     mpmc::Q32,
@@ -30,24 +21,25 @@ use hal::{
 use usb_device::class_prelude::UsbBusAllocator;
 
 #[cfg(feature = "joysticks")]
+use crate::usb::command::{JoystickAxis, JoystickNumber};
+#[cfg(feature = "joysticks")]
 use hal::pac::Interrupt;
 
 #[cfg(feature = "encoders")]
-use rotary_encoder_hal::Direction;
-use rotary_encoder_hal::Rotary;
+use crate::usb::command::{EncoderDirection, EncoderNumber};
+#[cfg(feature = "encoders")]
+use rotary_encoder_hal::{Direction, Rotary};
 
-use shift_register_hal::ShiftRegister;
-use switchy_rtic::{
+use crate::{
     configure,
     usb::{
-        command::{
-            ButtonNumber, Command, EncoderDirection, EncoderNumber, JoystickAxis, JoystickNumber,
-            UserAction,
-        },
+        command::{ButtonNumber, Command, UserAction},
         descriptor::CustomKeyboardReport,
         interface::UsbInterface,
     },
 };
+
+use shift_register_hal::ShiftRegister;
 
 /// The period between changing the USB HID keyboard report in ms
 pub const USB_QUEUE_CONSUMPTION_DELAY_MS: u32 = 10;

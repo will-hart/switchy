@@ -1,23 +1,19 @@
 [package]
 authors = ["William Hart <hart.wl@gmail.com>"]
-name = "switchy-rtic"
+name = "switchy"
 edition = "2018"
 version = "0.1.0"
-default-run = "switchy"
 
 [workspace]
 members = ["testsuite", "shift_register_hal"]
 
-[[bin]]
-name = "switchy"
-path = "src/bin/switchy.rs"
-
 [features]
 default = ["board_rev_1_or_2"]
 
-dev_board = ["blink", "buttons", "encoders", "logging"] # "joysticks"
-board_rev_1_or_2 =  ["logging", "buttons", "encoders", "joysticks"]
-board_rev_3 =  ["blink", "buttons", "encoders", "joysticks", "logging"]
+# joysticks are off because they currently spam and aren't used in keyboard mode
+dev_board = ["blink", "buttons", "encoders", "logging"]
+board_rev_1_or_2 =  ["logging", "buttons", "encoders"] # "joysticks" 
+board_rev_3 =  ["blink", "buttons", "encoders", "logging"] # "joysticks"
 
 blink = []
 buttons = []
