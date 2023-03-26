@@ -204,6 +204,11 @@ where
         }
     }
 
+    /// Gets the last read bits from registers
+    pub fn get_value(&self) -> u32 {
+        self.current_value
+    }
+
     /// Polls the shift register, returning either the bit number that was high, or None if
     /// either the current bit was LOW or the shift register was reading in its inputs.
     pub fn poll(&mut self) -> Option<ShiftRegisterOutput> {
@@ -213,7 +218,7 @@ where
         {
             if let Some(ref output) = val {
                 if output.is_changed {
-                    defmt::warn!(
+                    defmt::trace!(
                         "ShiftRegister received: bit {}, high {}, val {:b}",
                         output.bit,
                         output.is_high,

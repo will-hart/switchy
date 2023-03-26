@@ -137,13 +137,10 @@ mod app {
     ])]
     fn init(cx: init::Context) -> (Shared, Local, init::Monotonics) {
         #[cfg(feature = "logging")]
-        defmt::info!("Entering Init");
+        defmt::info!("[INIT] entering");
 
         // configure all the clocks and peripherals
         let config = configure::configure(cx.core, cx.device, cx.local.USB_BUS, cx.local.USB_MEM);
-
-        #[cfg(feature = "logging")]
-        defmt::println!("configured");
 
         // configure the message passing queues
         let (action_sender, action_receiver) = cx.local.action_queue.split();
@@ -154,14 +151,11 @@ mod app {
         ))
         .unwrap();
 
-        #[cfg(feature = "logging")]
-        defmt::println!("spawned send action to PC");
-
         // show a blinky light
         #[cfg(feature = "blink")]
         {
             blink::spawn_after(fugit::ExtU32::secs(1u32)).unwrap();
-            defmt::println!("spawned blink");
+            defmt::info!("[INIT] spawned blink");
         }
 
         // scan inputs
@@ -170,24 +164,24 @@ mod app {
             poll_registers::spawn_after(fugit::ExtU32::micros(INPUT_POLL_PERIOD_US)).unwrap();
 
             #[cfg(feature = "logging")]
-            defmt::println!("spawned poll registers");
+            defmt::info!("[INIT] spawned button shift register polling");
         }
 
         // scan inputs
         #[cfg(feature = "encoders")]
         {
             poll_encoders::spawn_after(fugit::ExtU32::micros(INPUT_POLL_PERIOD_US)).unwrap();
-            defmt::println!("spawned poll encoders");
+            defmt::info!("[INIT] spawned encoder polling");
         }
 
         #[cfg(feature = "joysticks")]
         {
             poll_adcs::spawn_after(fugit::ExtU32::millis(ADC_POLL_PERIOD_MS)).unwrap();
-            defmt::println!("spawned joysticks");
+            defmt::info!("[INIT] spawned joystick polling via ADCs");
         }
 
         #[cfg(feature = "logging")]
-        defmt::info!("Exiting Init");
+        defmt::info!("[INIT] exiting");
 
         (
             Shared {
@@ -232,38 +226,53 @@ mod app {
             let bank1 = _cx.local.bank1;
 
             if let Some(value) = bank1.poll() {
-                #[cfg(feature = "logging")]
-                defmt::debug!("Received changed bank1 value 0b{:016b}", value);
+                if value.is_changed {
+                    #[cfg(feature = "logging")]
+                    defmt::info!(
+                        "Received changed bank1 bit {} {}, is now {}. Value: 0b{:032b}",
+                        value.bit,
+                        if value.is_changed {
+                            "changed"
+                        } else {
+                            "unchanged"
+                        },
+                        if value.is_high { "high" } else { "low" },
+                        bank1.get_value(),
+                    );
 
-                _cx.shared.action_sender.lock(|sender| {
-                    sender
-                        .enqueue(UserAction::Button(ButtonNumber(value.bit), value.is_high))
-                        .ok();
-                });
+                    _cx.shared.action_sender.lock(|sender| {
+                        sender
+                            .enqueue(UserAction::Button(ButtonNumber(value.bit), value.is_high))
+                            .ok();
+                    });
+                }
             }
 
             let bank2 = _cx.local.bank2;
             if let Some(value) = bank2.poll() {
-                #[cfg(feature = "logging")]
-                defmt::debug!(
-                    "Received changed bank1 bit {} {}, is now {}",
-                    value.bit,
-                    if value.is_changed {
-                        "changed"
-                    } else {
-                        "unchanged"
-                    },
-                    if value.is_high { "high" } else { "low" }
-                );
+                if value.is_changed {
+                    #[cfg(feature = "logging")]
+                    defmt::info!(
+                        "Received changed bank2 bit {} {}, is now {}. Value: 0b{:032b}",
+                        value.bit,
+                        if value.is_changed {
+                            "changed"
+                        } else {
+                            "unchanged"
+                        },
+                        if value.is_high { "high" } else { "low" },
+                        bank2.get_value()
+                    );
 
-                _cx.shared.action_sender.lock(|sender| {
-                    sender
-                        .enqueue(UserAction::Button(
-                            ButtonNumber(value.bit + 16),
-                            value.is_high,
-                        ))
-                        .ok();
-                });
+                    _cx.shared.action_sender.lock(|sender| {
+                        sender
+                            .enqueue(UserAction::Button(
+                                ButtonNumber(value.bit + 16),
+                                value.is_high,
+                            ))
+                            .ok();
+                    });
+                }
             }
 
             poll_registers::spawn_after(fugit::ExtU32::micros(INPUT_POLL_PERIOD_US)).unwrap();
@@ -462,7 +471,7 @@ mod app {
             cx.local.keyboard_report.clear();
 
             #[cfg(feature = "logging")]
-            defmt::debug!("Cleared keyboard code");
+            defmt::info!("Cleared keyboard code");
 
             true
         } else if let Some(_action) = cx.local.action_receiver.dequeue() {
@@ -471,7 +480,7 @@ mod app {
             cx.local.keyboard_report.keycodes = [0x04, 0, 0, 0, 0, 0]; // TODO: have an actual keyboard mapping
 
             #[cfg(feature = "logging")]
-            defmt::debug!("Applied keyboard code {:?}", _action);
+            defmt::info!("Applied keyboard code {:?}", _action);
 
             true
         } else {
