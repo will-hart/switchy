@@ -209,8 +209,10 @@ where
         self.current_value
     }
 
-    /// Polls the shift register, returning either the bit number that was high, or None if
-    /// either the current bit was LOW or the shift register was reading in its inputs.
+    /// Polls the shift register, returning either the bit number that was high,
+    /// or None if either the current bit was LOW or the shift register was
+    /// reading in its inputs. Note that outputs are not debounced, debouncing
+    /// should either occur in the firmware calling `poll`, or in hardware.
     pub fn poll(&mut self) -> Option<ShiftRegisterOutput> {
         let val = self.read_bit();
 

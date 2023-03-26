@@ -52,8 +52,14 @@ use switchy_rtic::{
 /// The period between changing the USB HID keyboard report in ms
 pub const USB_QUEUE_CONSUMPTION_DELAY_MS: u32 = 10;
 
-/// The period for querying the inputs in us
-pub const INPUT_POLL_PERIOD_US: u32 = 10;
+/// The period for querying the button-like inputs (encoders, buttons) in us.
+/// Note that for the buttons on the shift register, this equates to sampling
+/// the buttons approx every 1400us (as there are 16 inputs, each input requires
+/// two clock pulses to read, and then the inputs must be read in with the latch
+/// pin, which takes two more cycles). Therefore to prevent bouncing if we
+/// sample 12 times using Ganssle's simple debouncing method, we should expect
+/// about 17ms of debounce (12*1400us).
+pub const INPUT_POLL_PERIOD_US: u32 = 40;
 
 /// The period for sampling the ADCs in ms
 pub const ADC_POLL_PERIOD_MS: u32 = 100;
