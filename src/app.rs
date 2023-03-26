@@ -32,6 +32,7 @@ use rotary_encoder_hal::{Direction, Rotary};
 
 use crate::{
     configure,
+    debounced::DebouncedInput,
     usb::{
         command::{ButtonNumber, Command, UserAction},
         descriptor::CustomKeyboardReport,
@@ -46,12 +47,12 @@ pub const USB_QUEUE_CONSUMPTION_DELAY_MS: u32 = 10;
 
 /// The period for querying the button-like inputs (encoders, buttons) in us.
 /// Note that for the buttons on the shift register, this equates to sampling
-/// the buttons approx every 1400us (as there are 16 inputs, each input requires
+/// the buttons approx every 1700us (as there are 16 inputs, each input requires
 /// two clock pulses to read, and then the inputs must be read in with the latch
 /// pin, which takes two more cycles). Therefore to prevent bouncing if we
-/// sample 12 times using Ganssle's simple debouncing method, we should expect
-/// about 17ms of debounce (12*1400us).
-pub const INPUT_POLL_PERIOD_US: u32 = 40;
+/// sample 15 times using Ganssle's simple debouncing method, we should expect
+/// about 25.5ms of debounce (15*1700us).
+pub const INPUT_POLL_PERIOD_US: u32 = 50;
 
 /// The period for sampling the ADCs in ms
 pub const ADC_POLL_PERIOD_MS: u32 = 100;
@@ -217,14 +218,25 @@ mod app {
         )
     }
 
-    #[task(local = [bank1, bank2], shared = [action_sender], priority = 2)]
+    #[task(
+        local = [
+            bank1,
+            bank2,
+            debounced: [DebouncedInput::<15>; 32] = [DebouncedInput::<15>::new(); 32]
+        ],
+        shared = [action_sender],
+        priority = 2
+    )]
     fn poll_registers(mut _cx: poll_registers::Context) {
         #[cfg(feature = "buttons")]
         {
             let bank1 = _cx.local.bank1;
+            let bank2 = _cx.local.bank2;
 
             if let Some(value) = bank1.poll() {
-                if value.is_changed {
+                let result = _cx.local.debounced[value.bit as usize].debounce(value.is_high);
+
+                if result.is_changed {
                     #[cfg(feature = "logging")]
                     defmt::info!(
                         "Received changed bank1 bit {} {}, is now {}. Value: 0b{:032b}",
@@ -234,39 +246,40 @@ mod app {
                         } else {
                             "unchanged"
                         },
-                        if value.is_high { "high" } else { "low" },
-                        bank1.get_value(),
+                        if result.is_on { "high" } else { "low" },
+                        (bank1.get_value() << 16) | bank2.get_value()
                     );
 
                     _cx.shared.action_sender.lock(|sender| {
                         sender
-                            .enqueue(UserAction::Button(ButtonNumber(value.bit), value.is_high))
+                            .enqueue(UserAction::Button(ButtonNumber(value.bit), result.is_on))
                             .ok();
                     });
                 }
             }
 
-            let bank2 = _cx.local.bank2;
             if let Some(value) = bank2.poll() {
-                if value.is_changed {
+                let result = _cx.local.debounced[value.bit as usize + 16].debounce(value.is_high);
+
+                if result.is_changed {
                     #[cfg(feature = "logging")]
                     defmt::info!(
                         "Received changed bank2 bit {} {}, is now {}. Value: 0b{:032b}",
                         value.bit,
-                        if value.is_changed {
+                        if result.is_changed {
                             "changed"
                         } else {
                             "unchanged"
                         },
-                        if value.is_high { "high" } else { "low" },
-                        bank2.get_value()
+                        if result.is_on { "high" } else { "low" },
+                        (bank1.get_value() << 16) | bank2.get_value()
                     );
 
                     _cx.shared.action_sender.lock(|sender| {
                         sender
                             .enqueue(UserAction::Button(
                                 ButtonNumber(value.bit + 16),
-                                value.is_high,
+                                result.is_on,
                             ))
                             .ok();
                     });
