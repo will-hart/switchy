@@ -485,13 +485,14 @@ mod app {
             defmt::info!("Cleared keyboard code");
 
             true
-        } else if let Some(_action) = cx.local.action_receiver.dequeue() {
+        } else if let Some(action) = cx.local.action_receiver.dequeue() {
             // otherwise if we have an action we should send it - first find the
             // current mapping from action to key press
             cx.local.keyboard_report.keycodes = [0x04, 0, 0, 0, 0, 0]; // TODO: have an actual keyboard mapping
+            *cx.local.current_action = Some(action.clone());
 
             #[cfg(feature = "logging")]
-            defmt::info!("Applied keyboard code {:?}", _action);
+            defmt::info!("Applied keyboard code {:?}", action);
 
             true
         } else {
