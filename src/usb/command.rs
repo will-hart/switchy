@@ -96,3 +96,9 @@ pub struct KeyAction {
     /// The code of the key that was pressed
     pub key: u8,
 }
+
+impl KeyAction {
+    pub const fn new(modifiers: u8, key: u8) -> Self {
+        Self { modifiers, key }
+    }
+}

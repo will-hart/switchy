@@ -33,6 +33,7 @@ use rotary_encoder_hal::{Direction, Rotary};
 use crate::{
     configure,
     debounced::DebouncedInput,
+    key_mapping::KEY_MAPPING,
     usb::{
         command::{ButtonNumber, Command, UserAction},
         descriptor::CustomKeyboardReport,
@@ -486,15 +487,30 @@ mod app {
 
             true
         } else if let Some(action) = cx.local.action_receiver.dequeue() {
-            // otherwise if we have an action we should send it - first find the
-            // current mapping from action to key press
-            cx.local.keyboard_report.keycodes = [0x04, 0, 0, 0, 0, 0]; // TODO: have an actual keyboard mapping
-            *cx.local.current_action = Some(action.clone());
+            match action {
+                UserAction::Button(ButtonNumber(number), is_pressed) if is_pressed == true => {
+                    let keys = KEY_MAPPING[number as usize];
 
-            #[cfg(feature = "logging")]
-            defmt::info!("Applied keyboard code {:?}", action);
+                    cx.local.keyboard_report.keycodes = [keys.key, 0, 0, 0, 0, 0];
+                    cx.local.keyboard_report.modifier = keys.modifiers;
 
-            true
+                    *cx.local.current_action = Some(action.clone());
+
+                    #[cfg(feature = "logging")]
+                    defmt::info!("Applied keyboard code {:?}", action);
+
+                    true
+                }
+                UserAction::Button(_, _) => {
+                    // when a button is released, clear the current report
+                    cx.local.keyboard_report.clear();
+                    true
+                }
+                UserAction::Encoder(_, _) | UserAction::None | UserAction::Joystick(_, _, _) => {
+                    // no effect in keyboard mode
+                    false
+                }
+            }
         } else {
             // nothing to report
             false

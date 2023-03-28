@@ -17,6 +17,7 @@ use stm32f4xx_hal as _; // memory layout
 
 mod configure;
 mod debounced;
+mod key_mapping;
 mod usb;
 
 // same panicking *behavior* as `panic-probe` but doesn't print a panic message
