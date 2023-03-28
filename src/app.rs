@@ -478,12 +478,9 @@ mod app {
         // associated with this action. For the keyboard we ignore joystick
         // actions but all other actions should be mapped to a specific key
         // combination
-        let should_report = if let Some(_) = cx.local.current_action {
+        let should_report = if let Some(_) = cx.local.current_action.take() {
             // we have a current action, we should clear it
             cx.local.keyboard_report.clear();
-
-            #[cfg(feature = "logging")]
-            defmt::info!("Cleared keyboard code");
 
             true
         } else if let Some(action) = cx.local.action_receiver.dequeue() {
