@@ -25,6 +25,13 @@ impl Command {
             payload_b,
         }
     }
+
+    /// Returns the contents of the command as an array of bytes, consisting of
+    /// the command ID, and the two payload bytes.
+    #[cfg(feature = "logging")]
+    pub fn as_bytes(&self) -> [u8; 3] {
+        [self.command_id, self.payload_a, self.payload_b]
+    }
 }
 
 impl From<[u8; 3]> for Command {

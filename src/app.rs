@@ -457,7 +457,28 @@ mod app {
     fn usb_interrupt(mut cx: usb_interrupt::Context) {
         cx.shared.usb.lock(|u| {
             if u.poll() {
-                // defmt::debug!("DATA AVAILABLE, {:?}", u.read_command());
+                match u.read_command() {
+                    Ok(Some(cmd)) => {
+                        #[cfg(feature = "logging")]
+                        defmt::warn!("Received command {:?}", cmd.as_bytes());
+
+                        cx.shared.command_queue.lock(|q| match q.enqueue(cmd) {
+                            Ok(_) => {}
+                            Err(_) => {
+                                #[cfg(feature = "logging")]
+                                defmt::error!(
+                                    "Error queuing usb command, queue is full. Dropped command is: {:?}",
+                                    cmd.as_bytes(),
+                                );
+                            }
+                        });
+                    }
+                    Ok(None) => {}
+                    Err(e) => {
+                        #[cfg(feature = "logging")]
+                        defmt::error!("Received USB command read error: {:?}", e);
+                    }
+                }
             }
         });
     }
