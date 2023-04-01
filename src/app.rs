@@ -486,17 +486,24 @@ mod app {
         } else if let Some(action) = cx.local.action_receiver.dequeue() {
             match action {
                 UserAction::Button(ButtonNumber(number), is_pressed) if is_pressed => {
-                    let keys = KEY_MAPPING[number as usize];
+                    if let Some(keys) = KEY_MAPPING[number as usize] {
+                        cx.local.keyboard_report.keycodes = [keys.key, 0, 0, 0, 0, 0];
+                        cx.local.keyboard_report.modifier = keys.modifiers;
 
-                    cx.local.keyboard_report.keycodes = [keys.key, 0, 0, 0, 0, 0];
-                    cx.local.keyboard_report.modifier = keys.modifiers;
+                        *cx.local.current_action = Some(action.clone());
 
-                    *cx.local.current_action = Some(action.clone());
+                        #[cfg(feature = "logging")]
+                        defmt::info!("Applied keyboard code {:?}", action);
 
-                    #[cfg(feature = "logging")]
-                    defmt::info!("Applied keyboard code {:?}", action);
+                        true
+                    } else {
+                        // no mapping, just ignore
 
-                    true
+                        #[cfg(feature = "logging")]
+                        defmt::info!("No mapping for keyboard code {:?}, ignoring", action);
+
+                        false
+                    }
                 }
                 UserAction::Button(_, _) => {
                     // when a button is released, clear the current report
