@@ -28,11 +28,11 @@ impl<'a> UsbInterface<'a> {
     /// Creates a new UsbInterface, configures it and returns it
     pub fn new(alloc: &'a UsbBusAllocator<UsbBus<USB>>) -> UsbInterface<'a> {
         // Create the pedal peripheral
-        let hid = HIDClass::new(&alloc, CustomKeyboardReport::desc(), USB_POLL_MS);
-        let command = HIDClass::new_ep_out(&alloc, CommandReport::desc(), USB_POLL_MS);
+        let hid = HIDClass::new(alloc, CustomKeyboardReport::desc(), USB_POLL_MS);
+        let command = HIDClass::new_ep_out(alloc, CommandReport::desc(), USB_POLL_MS);
 
         // TODO: this is a test code from pid.codes, change before release
-        let bus = UsbDeviceBuilder::new(&alloc, UsbVidPid(0x1209, 0x0001))
+        let bus = UsbDeviceBuilder::new(alloc, UsbVidPid(0x1209, 0x0001))
             .manufacturer("AttoZepto")
             .product("Switchy")
             .serial_number("000001")

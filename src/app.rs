@@ -478,14 +478,14 @@ mod app {
         // associated with this action. For the keyboard we ignore joystick
         // actions but all other actions should be mapped to a specific key
         // combination
-        let should_report = if let Some(_) = cx.local.current_action.take() {
+        let should_report = if cx.local.current_action.take().is_some() {
             // we have a current action, we should clear it
             cx.local.keyboard_report.clear();
 
             true
         } else if let Some(action) = cx.local.action_receiver.dequeue() {
             match action {
-                UserAction::Button(ButtonNumber(number), is_pressed) if is_pressed == true => {
+                UserAction::Button(ButtonNumber(number), is_pressed) if is_pressed => {
                     let keys = KEY_MAPPING[number as usize];
 
                     cx.local.keyboard_report.keycodes = [keys.key, 0, 0, 0, 0, 0];
@@ -514,11 +514,12 @@ mod app {
         };
 
         if should_report {
-            let report = cx.local.keyboard_report.clone();
+            let report = cx.local.keyboard_report;
+
             // send the report if any actions were received
             cx.shared
                 .usb
-                .lock(|usb| match usb.send_keyboard_report(report) {
+                .lock(|usb| match usb.send_keyboard_report(*report) {
                     Ok(_) => {}
                     Err(_e) => {
                         #[cfg(feature = "logging")]

@@ -89,7 +89,7 @@ where
 
     /// Enables the device
     pub fn enable(&mut self) {
-        if self.disabled == false {
+        if !self.disabled {
             return;
         }
 
