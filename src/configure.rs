@@ -153,19 +153,37 @@ pub fn configure<'a>(
     }
 }
 
+/// The configured microcontroller pins and interfaces
 pub struct Configuration<'a> {
+    /// A flashy LED pin for notifying the user
     pub led_pin: Switch<ErasedPin<Output>, ActiveHigh>,
+
+    /// A timer
     pub timer: MonoTimerUs<TIM2>,
+
+    /// The USB interface
     pub usb: UsbInterface<'a>,
 
+    /// Bank 1 shift register
     pub bank1: ShiftRegister<16, ErasedPin<Input>, ErasedPin<Output>>,
+
+    /// Bank 2 shift register
     pub bank2: ShiftRegister<16, ErasedPin<Input>, ErasedPin<Output>>,
 
+    /// Encoder 1
     pub encoder1: Rotary<ErasedPin<Input>, ErasedPin<Input>>,
+
+    /// Encoder 2
     pub encoder2: Rotary<ErasedPin<Input>, ErasedPin<Input>>,
+
+    /// Encoder 3
     pub encoder3: Rotary<ErasedPin<Input>, ErasedPin<Input>>,
+
+    /// Encoder 4
     pub encoder4: Rotary<ErasedPin<Input>, ErasedPin<Input>>,
 
+    /// The ADC configured for access via DMA - used for accessing analog
+    /// joystick axes
     pub adc_transfer:
         Transfer<StreamX<DMA2, 0>, 0, Adc<ADC1>, PeripheralToMemory, &'static mut [u16; 4]>,
 }

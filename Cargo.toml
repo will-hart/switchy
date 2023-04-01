@@ -1,23 +1,19 @@
 [package]
 authors = ["William Hart <hart.wl@gmail.com>"]
-name = "switchy-rtic"
+name = "switchy"
 edition = "2018"
 version = "0.1.0"
-default-run = "switchy"
 
 [workspace]
 members = ["testsuite", "shift_register_hal"]
 
-[[bin]]
-name = "switchy"
-path = "src/bin/switchy.rs"
-
 [features]
 default = ["board_rev_1_or_2"]
 
-dev_board = ["blink", "buttons", "encoders", "logging"] # "joysticks"
-board_rev_1_or_2 =  ["buttons", "encoders", "joysticks", "logging"]
-board_rev_3 =  ["blink", "buttons", "encoders", "joysticks", "logging"]
+# joysticks are off because they currently spam and aren't used in keyboard mode
+dev_board = ["blink", "buttons", "encoders", "logging"]
+board_rev_1_or_2 =  ["logging", "buttons", "encoders"] # "joysticks" 
+board_rev_3 =  ["blink", "buttons", "encoders", "logging"] # "joysticks"
 
 blink = []
 buttons = []
@@ -29,8 +25,8 @@ logging = ["shift_register_hal/logging"]
 defmt = "0.3.2"
 defmt-rtt = "0.4.0"
 panic-probe = { version = "0.3.0", features = ["print-defmt"] }
-cortex-m-rtic = "1.1"
-cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
+cortex-m-rtic = "1.1.4"
+cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
 stm32f4xx-hal = { version = "0.14.0", features = ["stm32f401", "defmt", "rtic", "usb_fs" ] }
 
 heapless = "0.7.16"
@@ -42,7 +38,7 @@ usbd-hid = "0.6.1"
 shift_register_hal = { path = "./shift_register_hal", default-features = false }
 
 [dependencies.serde]
-version="1"
+version="1.0.154"
 default-features=false
 
 # cargo build/run
@@ -82,11 +78,3 @@ incremental = false
 lto = 'fat'
 opt-level = "s" # <-
 overflow-checks = false # <-
-
-# uncomment this to switch from the crates.io version of defmt to its git version
-# check app-template's README for instructions
-# [patch.crates-io]
-# defmt = { git = "https://github.com/knurling-rs/defmt", rev = "use defmt version reported by `probe-run --version`" }
-# defmt-rtt = { git = "https://github.com/knurling-rs/defmt", rev = "use defmt version reported by `probe-run --version`" }
-# defmt-test = { git = "https://github.com/knurling-rs/defmt", rev = "use defmt version reported by `probe-run --version`" }
-# panic-probe = { git = "https://github.com/knurling-rs/defmt", rev = "use defmt version reported by `probe-run --version`" }
