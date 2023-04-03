@@ -15,5 +15,7 @@ rustflags = [
 target = "thumbv7em-none-eabihf" # Cortex-M4F and Cortex-M7F (with FPU)
 
 [alias]
-r = "run"
-rr = "run --release"
+r = "run --bin switchy"
+rr = "run --release --bin switchy"
+ru = "run --bin commander --target x86_64-pc-windows-msvc"
+bu = "build --bin commander --release --target x86_64-pc-windows-msvc"

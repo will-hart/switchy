@@ -1,11 +1,19 @@
 [package]
 authors = ["William Hart <hart.wl@gmail.com>"]
 name = "switchy"
-edition = "2021"
-version = "0.1.0"
+edition = { workspace = true }
+version = { workspace = true }
 
 [workspace]
-members = ["testsuite", "shift_register_hal"]
+members = ["commander", "testsuite", "shift_register_hal"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name="commander"
+path = "./commander"
 
 [features]
 default = ["board_rev_1_or_2"]
