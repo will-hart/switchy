@@ -1,0 +1,12 @@
+[package]
+name = "commander"
+version = { workspace = true }
+edition = { workspace = true }
+
+# This is an unstable feature, see https://github.com/rust-lang/cargo/issues/7004
+# and https://doc.rust-lang.org/cargo/reference/unstable.html#per-package-target
+# forced-target = "x86_64-pc-windows-msvc"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]

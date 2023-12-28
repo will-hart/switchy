@@ -12,6 +12,8 @@ use usbd_hid::hid_class::HIDClass;
 
 use crate::usb::descriptor::{CommandReport, CustomKeyboardReport};
 
+use super::command::Command;
+
 const USB_POLL_MS: u8 = 10;
 
 /// A container struct for the USB command and keyboard classes
@@ -48,13 +50,23 @@ impl<'a> UsbInterface<'a> {
     }
 
     /// Reads received data from the USB device
-    pub fn read_command(&mut self) -> Result<([u8; 64], usize), UsbError> {
+    pub fn read_command(&mut self) -> Result<Option<Command>, UsbError> {
         let mut buffer: [u8; 64] = [0; 64];
         match self.command.pull_raw_output(&mut buffer) {
-            Ok(size) => Ok((buffer, size)),
+            Ok(size) => {
+                // TODO: cache partial buffer
+                if size != 3 {
+                    #[cfg(feature = "logging")]
+                    defmt::warn!("Incomplete buffer, received {:?}", buffer);
+                    Ok(None)
+                } else {
+                    let cmd = Command::new(buffer[0], buffer[1], buffer[2]);
+                    Ok(Some(cmd))
+                }
+            }
             Err(UsbError::WouldBlock) => {
                 // no pending data
-                Ok((buffer, 0))
+                Ok(None)
             }
             Err(err) => panic!("Error receiving data {:?}", err),
         }
