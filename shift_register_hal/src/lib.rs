@@ -5,10 +5,9 @@
 
 //! SHIFT REGISTER HAL
 //!
-//! This is a higher level abstraction of a parallel to serial
-//! shift register, such as 74HC1645. It allows loading in data
-//! by polling, and presenting data when complete. It supports
-//! shift regsiter chaining up to 32 bits.
+//! This is a higher level abstraction of a parallel to serial shift register,
+//! such as 74HC165. It allows loading in data by polling, and presenting data
+//! when complete. It supports shift regsiter chaining up to 32 bits.
 //!
 //! Built using [`embedded-hal`] traits
 //!
